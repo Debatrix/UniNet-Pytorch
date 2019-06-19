@@ -16,11 +16,10 @@ class BaseDataset(data.Dataset):
 
         self.enc = None
 
-        with open(os.path.join(path, dataset, 'test.txt'), 'r') as f:
+        with open(os.path.join(path, dataset, mode + '.txt'), 'r') as f:
             self.img_list = [
                 tuple(line.strip().split(' ')) for line in f.readlines()
             ]
-            self.img_list = self.img_list[:int(0.1 * len(self.img_list))]
             label_list = sorted(list(set([item[1] for item in self.img_list])))
 
         np.random.shuffle(self.img_list)
@@ -30,6 +29,7 @@ class BaseDataset(data.Dataset):
         self.enc.fit(self.label_list)
 
         self.transform = transforms.Compose([
+            transforms.Resize((64, 512)),
             transforms.ToTensor(),
         ])
 
@@ -46,4 +46,4 @@ class BaseDataset(data.Dataset):
             self.path, img_name)).convert("L")
         img = self.transform(img)
         label_vec = self.enc.transform([label])
-        return img, label, label_vec
+        return img, label, label_vec, img_name

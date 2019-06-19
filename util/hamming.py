@@ -4,6 +4,12 @@ import numpy as np
 from tqdm import tqdm
 
 
+def feature_binarization(feature, mask, t=0.6):
+    bin_feature = feature > feature.mean()
+    bin_mask = np.logical_not(np.logical_and(mask, np.abs(feature - feature.mean()) < t))
+    return np.logical_and(bin_feature, bin_mask)
+
+
 def shiftbits(template, noshifts):
     """
     Description:
