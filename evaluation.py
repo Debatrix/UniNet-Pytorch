@@ -39,8 +39,9 @@ def decomposition(labels, features, c_score=None):
             feature[x, :] = features[y, :]
         plt.scatter(feature[:, 0], feature[:, 1], color=c, label=label)
     plt.legend(ncol=2)
-    plt.title("Clustering Result\nsilhouette score:{:.2f}\ncalinski harabaz score:{:.2f}".format(c_score[0],
-                                                                                                 c_score[1]))
+    plt.title(
+        "Clustering Result\nsilhouette score:{:.2f}\ncalinski harabaz score:{:.2f}"
+        .format(c_score[0], c_score[1]))
     plt.show()
 
 
@@ -51,9 +52,9 @@ def cal_DET(features, labels):
         features = normalize(features)
         sim = np.dot(features, features.T)
     num = len(labels)
-    sim = np.delete(np.reshape(sim, (1, -1)), [x * x for x in range(num)])
+    sim = sim[~np.eye(num, dtype=np.bool)]
     bool = np.dot(labels, labels.T)
-    bool = np.delete(np.reshape(bool, (1, -1)), [x * x for x in range(num)])
+    bool = bool[~np.eye(num, dtype=np.bool)]
 
     fpr, tpr, thresholds = metrics.roc_curve(bool, sim)
     fnr = 1 - tpr
