@@ -6,6 +6,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from PIL import Image
+from scipy.io import savemat
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -15,16 +16,16 @@ from dataset import BaseDataset
 
 class LoadConfig(object):
     def __init__(self):
-        self.dataset_path = 'E:/dataset'
-        self.dataset = 'UniNet-test'
+        self.dataset_path = '/home/dl/wangleyuan/dataset'
+        self.dataset = 'CASIA-Iris-Thousand'
         self.model = 'CASIA'
 
         self.mode = 'test'
-        self.save = 'pic'
+        self.save = 'mat'
 
-        self.batch_size = 1
-        self.device = "cpu"
-        self.num_workers = 4
+        self.batch_size = 16
+        self.device = "cuda:0"
+        self.num_workers = 2
 
         self._change_cfg()
 
@@ -74,41 +75,27 @@ def extraction(cfg):
     with torch.no_grad():
         featnet.eval()
         masknet.eval()
-        labels = []
-        img_names = []
-        labels_vec = np.zeros((len(dataset), dataset.class_num))
-        features = np.zeros((len(dataset), 64, 512))
-        masks = np.zeros((len(dataset), 3, 64, 512))
-        didx = -1
-        for didx, (img_batch, label_batch, label_vec_batch, img_name_batch) in tqdm(
-                enumerate(data_loader), ncols=80, ascii=True):
+        if not os.path.exists('feature/{}'.format(cfg.dataset)):
+            os.makedirs('feature/{}'.format(cfg.dataset))
+        for img_batch, _, label_vec_batch, img_name_batch in tqdm(
+                data_loader, ncols=80, ascii=True):
             img_batch = img_batch.to(device)
             feature_batch = featnet(img_batch)
             mask_batch = masknet(img_batch)
-            for idx in range(feature_batch.shape[0]):
-                labels_vec[idx + didx, :] = label_vec_batch[idx, :].numpy()
-                labels.append(label_batch[idx])
-                img_names.append(img_name_batch[idx])
-                features[idx + didx, :, :] = feature_batch[idx].cpu().numpy()
-                masks[idx + didx, :2, :, :] = mask_batch[idx].cpu().numpy()
+            for idx, img_name in enumerate(img_name_batch):
+                feature = feature_batch[idx].cpu().numpy()
+                label_vec = label_vec_batch.cpu().numpy()
                 mask = F.softmax(mask_batch[idx], dim=0).cpu().numpy()
-                masks[idx + didx, 2, :, :] = mask[0] < mask[1]
-        if cfg.save == 'pth':
-            ft_path = 'feature/UniNet_{}__{}.pth'.format(cfg.model, cfg.dataset)
-            ft_load = {'features': features, 'masks': masks, 'labels_vec': labels_vec, 'labels': labels}
-            torch.save(ft_load, ft_path)
-        elif cfg.save == 'pic':
-            if not os.path.exists('feature/{}'.format(cfg.dataset)):
-                os.makedirs('feature/{}'.format(cfg.dataset))
-            for idx in range(len(dataset)):
-                feature_img = features[idx, :, :]
-                feature_img = (feature_img - feature_img.min()) / (feature_img.max() - feature_img.min())
-                Image.fromarray(feature_img * 255).convert('L').save(
-                    'feature/{}/{}_feature.png'.format(cfg.dataset, img_names[idx]))
-                Image.fromarray(masks[idx, 2, :, :] * 255).convert('L').save(
-                    'feature/{}/{}_mask.png'.format(cfg.dataset, img_names[idx]))
-
-    return features, masks, labels, labels_vec
+                mask = (mask[0] < mask[1]).astype(np.bool)
+                if cfg.save == 'pic':
+                    feature_img = (feature - feature.min()) / (feature.max() - feature.min())
+                    Image.fromarray(feature_img * 255).convert('L').save(
+                        'feature/{}/{}_feature.png'.format(cfg.dataset, img_name))
+                    Image.fromarray(mask * 255).convert('L').save(
+                        'feature/{}/{}_mask.png'.format(cfg.dataset, img_name))
+                else:
+                    ft_load = {'feature': feature, 'mask': mask, 'label_vec': label_vec}
+                    savemat('feature/{}/{}.mat'.format(cfg.dataset, img_name), ft_load)
 
 
 if __name__ == '__main__':

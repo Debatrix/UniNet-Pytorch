@@ -22,11 +22,14 @@ class BaseDataset(data.Dataset):
             ]
             label_list = sorted(list(set([item[1] for item in self.img_list])))
 
+        with open(os.path.join(path, dataset, 'all_labels.txt'), 'r') as f:
+            all_labels = [line.strip().split(' ')[0] for line in f.readlines()]
+
         np.random.shuffle(self.img_list)
         self.label_list = sorted(label_list)
 
         self.enc = LabelBinarizer()
-        self.enc.fit(self.label_list)
+        self.enc.fit(all_labels)
 
         self.transform = transforms.Compose([
             transforms.Resize((64, 512)),
