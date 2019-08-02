@@ -24,25 +24,26 @@ Zijing Zhao and Ajay Kumar, "Towards More Accurate Iris Recognition Using Deeply
     - 将caffemodel中的网络参数转存为pth格式,可被pytorch加载
   - **normalize.py**
     - 虹膜图像归一化
+   - **normalize_tool.py**  
+     - 虹膜图像归一化工具
+     - 左键标注, 右键画圆(至少3个点), 'q'键确认, 其他键取消
+     - 先虹膜, 后瞳孔
   - **segment.py**
     - 虹膜图像分割
   - **hamming.py*
     - 计算特征hamming距离
-- **dataset.py**
-  - 数据集文件夹格式如下:  
-      - *数据集根目录*  
-        - *数据集*  
-          - *Image*  
-            - 原始图像
-          - *NormIm*  
-            - 归一化图像
-          - *ImParam.txt*  
-            - 保存图像均值\方差
-          - *SegResult.txt*  
-            - 定位结果
-          - *test.txt*  
-            - 测试数据 每一行如:030002006R_0000000000001.bmp 2006R
-          - *train.txt*  
-            - 训练数据 每一行如:030002006R_0000000000001.bmp 2006R
-- **extraction.py**
-  - 特征提取 可通过修改LoadConfig类中的变量确定默认参数,也可以通过命令行修改参数  save参数可选'pth'/'pic' 将feature保存为数组/图片
+- **enroll_dataset.py**
+    - 注册整个文件夹中的图像
+- **enroll_single.py**
+    - 注册单个的图像
+- **evaluation.py**
+    - 评估用代码
+    - *TODO:代码性能测试*
+- **match.py**
+    - 比对代码
+    - *TODO:速度极慢, python的多线程无用,需要设计成batch的*
+    - *TODO:代码太老了*
+- **verify.py**
+    - 识别代码, 将提取得到的mat与文件夹里的全部mat比对
+
+  

@@ -1,6 +1,7 @@
+import bisect
+
 import cv2
 import numpy as np
-import bisect
 
 
 def stretchlim(img, tol=(0.0, 0.99)):
@@ -9,8 +10,8 @@ def stretchlim(img, tol=(0.0, 0.99)):
 
     hist = cv2.calcHist([img], [0], None, [256], [0, 256])
     cdf = np.cumsum(hist) / np.sum(hist)
-    ilow = np.where(cdf > tol_low)[0]
-    ihigh = np.where(cdf >= tol_high)[0]
+    ilow = np.where(cdf > tol_low)[0][0]
+    ihigh = np.where(cdf >= tol_high)[0][0]
     th = (ilow, ihigh)
     return th
 
@@ -70,5 +71,5 @@ def adjust_iris(img, r_th=(0.05, 0.95)):
 
 
 def enh_contrast(img):
-    img = np.clip(img, stretchlim(img, (0.05, 0.95)))
+    img = np.clip(img, *stretchlim(img, (0.05, 0.95)))
     return cv2.equalizeHist(img)
