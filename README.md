@@ -30,8 +30,6 @@ Zijing Zhao and Ajay Kumar, "Towards More Accurate Iris Recognition Using Deeply
      - 先虹膜, 后瞳孔
   - **segment.py**
     - 虹膜图像分割
-  - **hamming.py*
-    - 计算特征hamming距离
 - **enroll_dataset.py**
     - 注册整个文件夹中的图像
 - **enroll_single.py**
