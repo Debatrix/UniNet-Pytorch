@@ -1,47 +1,45 @@
 # UniNet-Pytorch
 An accurate and generalizable deep learning framework for iris recognition.
 
-**参见**:  
+**Reference**:  
 Zijing Zhao and Ajay Kumar, "Towards More Accurate Iris Recognition Using Deeply Learned Spatially Corresponding Features", Internation Conference on Computer Vision (ICCV), Spotlight, Venice, Italy, 2017.  
  - [论文](https://www4.comp.polyu.edu.hk/~csajaykr/myhome/papers/ICCV2017.pdf)
  - [代码](http://www.comp.polyu.edu.hk/~csajaykr/deepiris.htm)
 
 ## Install
 - Python 3.6
-- Pytorch 1.0
-- torchvision 0.2.2
+- Pytorch 1.0+
+- torchvision 0.2.2+
 - opencv 3.4
-- caffe(可选,用于模型转换)
-- tqdm(可选,看着舒服)
+- caffe(Optional)
+- tqdm(Optional)
 
 ## Code structure
 - *ICCV17_release*
   - 论文附带的源代码与caffe模型
 - *models*
-   - 转换得到的Pytorch模型,其中将原论文中提到的FeatNet与MaskNet分开保存
+   - Source code and caffe model attached to the paper
 - *util*
   - **caffemodel2pth.py**
-    - 将caffemodel中的网络参数转存为pth格式,可被pytorch加载
+    - Export the network parameters from caffemodel to pytorch pth format
   - **normalize.py**
-    - 虹膜图像归一化
+    - Function of iris image normalization.
    - **normalize_tool.py**  
-     - 虹膜图像归一化工具
-     - 左键标注, 右键画圆(至少3个点), 'q'键确认, 其他键取消
-     - 先虹膜, 后瞳孔
+     - Tool for iris normalization.
+     - Left click to mark, right click to draw a circle (at least 3 points),'q' key to confirm, other keys to cancel
+     - Iris first, pupil rear
   - **segment.py**
-    - 虹膜图像分割
+    - Iris image segmentation
 - **enroll_dataset.py**
-    - 注册整个文件夹中的图像
+    - Register all images in the folder
 - **enroll_single.py**
-    - 注册单个的图像
+    - Register single image in the folder
 - **evaluation.py**
-    - 评估用代码
-    - *TODO:代码性能测试*
+    - Evaluation
 - **match.py**
-    - 比对代码
-    - *TODO:速度极慢, python的多线程无用,需要设计成batch的*
-    - *TODO:代码太老了*
+    - Match
 - **verify.py**
-    - 识别代码, 将提取得到的mat与文件夹里的全部mat比对
+    - Identify
+    - Compare the extracted mat file with all mat files in the folder
 
   
