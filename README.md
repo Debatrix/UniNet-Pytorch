@@ -3,8 +3,8 @@ An accurate and generalizable deep learning framework for iris recognition.
 
 **Reference**:  
 Zijing Zhao and Ajay Kumar, "Towards More Accurate Iris Recognition Using Deeply Learned Spatially Corresponding Features", Internation Conference on Computer Vision (ICCV), Spotlight, Venice, Italy, 2017.  
- - [论文](https://www4.comp.polyu.edu.hk/~csajaykr/myhome/papers/ICCV2017.pdf)
- - [代码](http://www.comp.polyu.edu.hk/~csajaykr/deepiris.htm)
+ - [Paper](https://www4.comp.polyu.edu.hk/~csajaykr/myhome/papers/ICCV2017.pdf)
+ - [Code](http://www.comp.polyu.edu.hk/~csajaykr/deepiris.htm)
 
 ## Install
 - Python 3.6
@@ -16,7 +16,7 @@ Zijing Zhao and Ajay Kumar, "Towards More Accurate Iris Recognition Using Deeply
 
 ## Code structure
 - *ICCV17_release*
-  - 论文附带的源代码与caffe模型
+  - Source code and caffe model attached to the paper
 - *models*
    - Source code and caffe model attached to the paper
 - *util*
