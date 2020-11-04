@@ -1,5 +1,6 @@
 # UniNet-Pytorch
-Pytorch port of [UniNet](https://www4.comp.polyu.edu.hk/~csajaykr/myhome/papers/ICCV2017.pdf)
+Pytorch port of [UniNet](https://www4.comp.polyu.edu.hk/~csajaykr/myhome/papers/ICCV2017.pdf).
+
 An accurate and generalizable deep learning framework for iris recognition.
 
 **Reference**:  
