@@ -1,109 +1,146 @@
-from itertools import combinations
-
-import numpy as np
-from tqdm import tqdm
-
-
-def feature_binarization(feature, mask, t=0.6):
-    bin_feature = feature > feature.mean()
-    bin_mask = np.logical_not(np.logical_and(mask, np.abs(feature - feature.mean()) < t))
-    return np.logical_and(bin_feature, bin_mask)
+# %%
+import tqdm
+import time
+import torch
+import torch.nn.functional as F
 
 
-def shiftbits(template, noshifts):
-    """
-    Description:
-        Shift the bit-wise iris patterns.
-
-    Input:
-        template    - The template to be shifted.
-        noshifts    - The number of shift operators, positive for right
-                      direction and negative for left direction.
-
-    Output:
-        templatenew    - The shifted template.
-    """
-    # Initialize
-    templatenew = np.zeros(template.shape)
-    width = template.shape[1]
-    s = 2 * np.abs(noshifts)
-    p = width - s
-
-    # Shift
-    if noshifts == 0:
-        templatenew = template
-
-    elif noshifts < 0:
-        x = np.arange(p)
-        templatenew[:, x] = template[:, s + x]
-        x = np.arange(p, width)
-        templatenew[:, x] = template[:, x - p]
-
-    else:
-        x = np.arange(s, width)
-        templatenew[:, x] = template[:, x - s]
-        x = np.arange(s)
-        templatenew[:, x] = template[:, p + x]
-
-    return templatenew
+# %%
+def BitShift(features, bit=0):
+    W = features.shape[-1]
+    if bit > 0:
+        left_part = features[..., :W - bit]
+        right_part = features[..., W - bit:]
+        features = torch.cat((right_part, left_part), dim=-1).contiguous()
+    elif bit < 0:
+        bit = -bit
+        left_part = features[..., :bit]
+        right_part = features[..., bit:]
+        features = torch.cat((right_part, left_part), dim=-1).contiguous()
+    return features
 
 
-def cal_hamming_dist(template1, template2, mask1=None, mask2=None):
-    """
-        Description:
-            Calculate the Hamming distance between two iris templates.
+def BitExpand(features, bit=0):
+    if bit != 0:
+        W = features.shape[-1]
+        if bit < 0:
+            bit = W // 2
+        left_part = features[..., :bit]
+        right_part = features[..., W - bit:]
+        features = torch.cat((right_part, features, left_part),
+                             dim=-1).contiguous()
+    return features
 
-        Input:
-            template1    - The first template.
-            mask1        - The first noise mask.
-            template2    - The second template.
-            mask2        - The second noise mask.
 
-        Output:
-            hd            - The Hamming distance as a ratio.
-        """
-    # Initialize
-    hd = np.nan
-
-    # Shift template left and right, use the lowest Hamming distance
+# %%
+def cal_Hamming(feat1, feat2, mask1=None, mask2=None):
     if mask1 is None or mask2 is None:
-        for shifts in range(-8, 9):
-            template1s = shiftbits(template1, shifts)
+        mask1 = torch.ones_like(feat1).to(torch.bool)
+        mask2 = torch.ones_like(feat2).to(torch.bool)
+    mask = torch.logical_and(mask1, mask2)
+    dist = torch.logical_and(torch.logical_xor(feat1, feat2), mask).to(
+        torch.float).sum() / mask.to(torch.float).sum()
+    return dist
 
-            hd1 = np.logical_xor(template1s, template2).sum() / template1s.size
 
-            if hd1 < hd or np.isnan(hd):
-                hd = hd1
+def cal_batch_Hamming(features, masks, shift_bits=10):
+    if masks is None:
+        masks = torch.ones_like(features).to(features.dtype)
+    dist = torch.zeros(features.shape[0], features.shape[0])
+
+    for x in range(features.shape[0]):
+        for y in range(features.shape[0]):
+            _dist = []
+            for bit in range(-shift_bits, shift_bits + 1):
+                _feature = BitShift(features[x], bit)
+                _mask = BitShift(masks[x], bit)
+                _dist.append(
+                    cal_Hamming(_feature, features[y], _mask, masks[y]))
+            dist[x][y] = torch.max(torch.tensor(_dist))
+    return dist
+
+
+# %%
+def conv_Hamming(feat1,
+                 feat2,
+                 mask1=None,
+                 mask2=None,
+                 shift_bits=10,
+                 dtype=torch.float):
+    H, W = feat2.shape[-2:]
+
+    feat1 = feat1.to(dtype)
+    feat2 = feat2.to(dtype)
+    mask1 = mask1.to(dtype)
+    mask2 = mask2.to(dtype)
+
+    feat1 = BitExpand(feat1, shift_bits)
+    feat1 = torch.nn.functional.unfold(feat1, (H, W)).unsqueeze(1)
+    feat2 = torch.nn.functional.unfold(feat2, (H, W)).unsqueeze(0)
+
+    if mask1 is None or mask2 is None:
+        mask1 = torch.ones_like(feat1).to(dtype)
+        mask2 = torch.ones_like(feat2).to(dtype)
     else:
-        for shifts in range(-8, 9):
-            template1s = shiftbits(template1, shifts)
-            mask1s = shiftbits(mask1, shifts)
+        mask1 = BitExpand(mask1.to(dtype), shift_bits)
+        mask1 = torch.nn.functional.unfold(mask1, (H, W)).unsqueeze(1)
+        mask2 = torch.nn.functional.unfold(mask2.to(dtype),
+                                           (H, W)).unsqueeze(0)
 
-            mask = np.logical_or(mask1s, mask2)
-            nummaskbits = np.sum(mask == 1)
-            totalbits = template1s.size - nummaskbits
+    mask = mask1 * mask2
+    dist = (1 - (feat1 * feat2) - ((1 - feat1) * (1 - feat2))) * mask
+    dist = (dist.sum(-2) / mask.sum(-2)).max(-1)[0]
 
-            C = np.logical_xor(template1s, template2)
-            C = np.logical_and(C, np.logical_not(mask))
-            bitsdiff = np.sum(C == 1)
-
-            if totalbits == 0:
-                hd = np.nan
-            else:
-                hd1 = bitsdiff / totalbits
-                if hd1 < hd or np.isnan(hd):
-                    hd = hd1
-
-    return hd
+    return dist
 
 
-def get_hmdist_mat(features, masks):
-    num_feature = features.shape[0]
-    hm_dists = np.zeros((num_feature, num_feature))
-    pairs = [x for x in combinations([y for y in range(num_feature)], 2)]
-    for x, y in tqdm(pairs, ncols=75, ascii=True):
-        hm_dists[x, y] = cal_hamming_dist(features[x, :, :], features[y, :, :], masks[x, :, :], masks[y, :, :])
+def conv_batch_Hamming(features, masks, batch_size=64, shift_bits=10):
+    if masks is None:
+        masks = torch.ones_like(features).to(features.dtype)
+    sim = torch.zeros((features.shape[0], features.shape[0]))
 
-    hm_dists = hm_dists + hm_dists.T
+    batch_num = features.shape[0] // batch_size
+    batch_num = batch_num if features.shape[
+        0] % batch_size == 0 else batch_num + 1
 
-    return hm_dists
+    for cols in tqdm.tqdm(range(batch_num)):
+        for rows in range(batch_num):
+            sim[cols * batch_size:(cols + 1) * batch_size,
+                rows * batch_size:(rows + 1) * batch_size] = conv_Hamming(
+                    features[cols * batch_size:(cols + 1) * batch_size],
+                    features[rows * batch_size:(rows + 1) * batch_size],
+                    masks[cols * batch_size:(cols + 1) * batch_size],
+                    masks[rows * batch_size:(rows + 1) * batch_size],
+                    shift_bits)
+    return sim
+
+
+# %%
+def _test(test=1, dataset=[8]):
+    for data_num in dataset:
+        t_xor, t_conv = 0, 0
+        err = 0
+        conv, xor = 0, 0
+        for _ in range(test):
+            torch.cuda.empty_cache()
+            feat = (torch.rand(data_num, 1, 64, 512) > 0.5).cuda()
+            mask = (torch.rand(data_num, 1, 64, 512) > 0.5).cuda()
+
+            s1 = time.time()
+            xor = cal_batch_Hamming(feat, None).cpu()
+            s2 = time.time()
+            with torch.no_grad():
+                conv = conv_batch_Hamming(feat, None, 16).cpu()
+            s3 = time.time()
+
+            t_xor += s2 - s1
+            t_conv += s3 - s2
+            err += torch.abs(xor - conv).mean()
+        print('\ndatanum:{} xor:{:.4f}s conv:{:.4f}s err:{:.2e}'.format(
+            data_num, t_xor / test, t_conv / test, err))
+
+
+if __name__ == "__main__":
+    _test()
+
+# %%

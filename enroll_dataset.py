@@ -13,16 +13,19 @@ from tqdm import tqdm
 
 import model
 from util.img_enhance import enh_contrast
+from evaluation import MatchBinary
 
 
 class LoadConfig(object):
     def __init__(self):
-        self.dataset_path = '/home/dl/wangleyuan/dataset/CASIA-Iris-Thousand'
+        self.dataset_path = '/data1/leyuan.wang/dataset/CASIA-Complex-CX3/'
 
         self.mode = 'test'
+        self.is_eval = True
+        self.shift_bits = 20
 
         self.model = 'CASIA'
-        self.save = 'mat'
+        self.save = 'amat'
 
         self.batch_size = 1
         self.device = "cuda:0"
@@ -87,6 +90,7 @@ class Dataset(data.Dataset):
 
 
 def extraction(cfg):
+    print('\nload model and dataset...')
     # cpu or gpu?
     if torch.cuda.is_available() and cfg.device is not None:
         device = torch.device(cfg.device)
@@ -96,11 +100,10 @@ def extraction(cfg):
         device = torch.device("cpu")
 
     dataset = Dataset(path=cfg.dataset_path, mode=cfg.mode)
-    data_loader = DataLoader(
-        dataset,
-        cfg.batch_size,
-        shuffle=False,
-        num_workers=cfg.num_workers)
+    data_loader = DataLoader(dataset,
+                             cfg.batch_size,
+                             shuffle=False,
+                             num_workers=cfg.num_workers)
 
     featnet = model.FeatNet()
     featnet.load_state_dict(torch.load(cfg.featnet_path, map_location=device))
@@ -109,13 +112,16 @@ def extraction(cfg):
     masknet.load_state_dict(torch.load(cfg.masknet_path, map_location=device))
     masknet.to(device)
 
+    print('\nfeature extraction...')
+    feature_dict = {}
     with torch.no_grad():
         featnet.eval()
         masknet.eval()
         if not os.path.exists('feature/{}'.format(cfg.dataset_name)):
             os.makedirs('feature/{}'.format(cfg.dataset_name))
-        for img_batch, label_batch, img_name_batch in tqdm(
-                data_loader, ncols=80, ascii=True):
+        for img_batch, label_batch, img_name_batch in tqdm(data_loader,
+                                                           ncols=80,
+                                                           ascii=True):
             img_batch = img_batch.to(device)
             feature_batch = featnet(img_batch)
             mask_batch = masknet(img_batch)
@@ -126,14 +132,73 @@ def extraction(cfg):
                 template[feature < feature.mean()] = False
                 tmask = (np.abs(feature - feature.mean()) > 0.6)
                 mask = F.softmax(mask_batch[idx], dim=0).cpu().numpy()
-                mask = np.logical_and((mask[0] < mask[1]).astype(np.bool), tmask)
+                mask = np.logical_and((mask[0] < mask[1]).astype(np.bool),
+                                      tmask)
+                feature_save = {
+                    'template': template,
+                    'mask': mask,
+                    'label': label_batch[idx]
+                }
+                feature_dict[img_name] = feature_save
                 if cfg.save == 'pic':
-                    cv2.imwrite('feature/{}/{}_img.png'.format(cfg.dataset_name, img_name), img * 255)
-                    cv2.imwrite('feature/{}/{}_template.png'.format(cfg.dataset_name, img_name), template * 255)
-                    cv2.imwrite('feature/{}/{}_mask.png'.format(cfg.dataset_name, img_name), mask * 255)
+                    cv2.imwrite(
+                        'feature/{}/{}_img.png'.format(cfg.dataset_name,
+                                                       img_name), img * 255)
+                    cv2.imwrite(
+                        'feature/{}/{}_template.png'.format(
+                            cfg.dataset_name, img_name), template * 255)
+                    cv2.imwrite(
+                        'feature/{}/{}_mask.png'.format(
+                            cfg.dataset_name, img_name), mask * 255)
+                elif cfg.save == 'amat':
+                    pass
+                elif cfg.save == 'mat':
+                    savemat(
+                        'feature/{}/feature_UniNet_{}_{}.mat'.format(
+                            cfg.dataset_name, cfg.model, img_name),
+                        feature_save)
                 else:
-                    ft_load = {'template': template, 'mask': mask, 'label': label_batch[idx]}
-                    savemat('feature/{}/{}.mat'.format(cfg.dataset_name, img_name), ft_load)
+                    raise NotImplementedError
+    if cfg.save == 'amat':
+        savemat(
+            'feature/feature_UniNet_{}_{}.mat'.format(cfg.model,
+                                                      cfg.dataset_name),
+            feature_dict)
+
+    if cfg.is_eval:
+        print('\nevaluate...')
+        data_feature = {'features': [], 'masks': [], 'labels': []}
+        for v in feature_dict.values():
+            data_feature['features'].append(torch.tensor(v['template']))
+            data_feature['labels'].append(v['label'])
+            data_feature['masks'].append(torch.tensor(v['mask']))
+        data_feature['features'] = torch.stack(data_feature['features'], 0)
+        data_feature['masks'] = torch.stack(data_feature['masks'], 0)
+
+        FAR, FRR, T, EER, T_eer, FNMR_FMR, acc_rank1, acc_rank5, acc_rank10 = MatchBinary(
+            data_feature, cfg.shift_bits)
+        DET_data = dict(FAR=FAR,
+                        FRR=FRR,
+                        T=T,
+                        EER=EER,
+                        T_eer=T_eer,
+                        FNMR_FMR=FNMR_FMR,
+                        acc_rank1=acc_rank1,
+                        acc_rank5=acc_rank5,
+                        acc_rank10=acc_rank10)
+
+        savemat(
+            'feature/evaluation_UniNet_{}_{}.mat'.format(
+                cfg.model, cfg.dataset_name), DET_data)
+        print('-' * 50)
+        print('\nEER:{:.4f}%\nAcc: rank1 {:.4f}% rank5 {:.4f}% rank10 {:.4f}%'.
+              format(EER * 100, acc_rank1 * 100, acc_rank5 * 100,
+                     acc_rank10 * 100))
+        print('-' * 50)
+        for fmr, fnmr in FNMR_FMR.items():
+            print('FNMR:{:.2f}%% @FMR:{:.2f}%%'.format(100.0 * fnmr,
+                                                       100.0 * fmr))
+        print('-' * 50)
 
 
 if __name__ == '__main__':
