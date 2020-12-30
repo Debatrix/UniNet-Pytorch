@@ -18,16 +18,16 @@ from evaluation import MatchBinary
 
 class LoadConfig(object):
     def __init__(self):
-        self.dataset_path = '/data1/leyuan.wang/dataset/CASIA-Complex-CX3/'
+        self.dataset_path = '/home/leyuan.wang/dataset/CASIA-Complex-CX3'
 
         self.mode = 'test'
-        self.is_eval = True
-        self.shift_bits = 20
+        self.is_eval = False
+        self.shift_bits = 10
 
         self.model = 'CASIA'
-        self.save = 'amat'
+        self.save = 'pth'
 
-        self.batch_size = 1
+        self.batch_size = 32
         self.device = "cuda:0"
         self.num_workers = 1
 
@@ -150,7 +150,7 @@ def extraction(cfg):
                     cv2.imwrite(
                         'feature/{}/{}_mask.png'.format(
                             cfg.dataset_name, img_name), mask * 255)
-                elif cfg.save == 'amat':
+                elif cfg.save == 'pth':
                     pass
                 elif cfg.save == 'mat':
                     savemat(
@@ -159,11 +159,11 @@ def extraction(cfg):
                         feature_save)
                 else:
                     raise NotImplementedError
-    if cfg.save == 'amat':
-        savemat(
-            'feature/feature_UniNet_{}_{}.mat'.format(cfg.model,
-                                                      cfg.dataset_name),
-            feature_dict)
+    if cfg.save == 'pth':
+        torch.save(
+            feature_dict,
+            'feature/feature_UniNet_{}_{}.pth'.format(cfg.model,
+                                                      cfg.dataset_name))
 
     if cfg.is_eval:
         print('\nevaluate...')
@@ -176,7 +176,7 @@ def extraction(cfg):
         data_feature['masks'] = torch.stack(data_feature['masks'], 0)
 
         FAR, FRR, T, EER, T_eer, FNMR_FMR, acc_rank1, acc_rank5, acc_rank10 = MatchBinary(
-            data_feature, cfg.shift_bits)
+            data_feature, cfg.shift_bits, cfg.batch_size)
         DET_data = dict(FAR=FAR,
                         FRR=FRR,
                         T=T,

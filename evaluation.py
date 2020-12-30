@@ -116,7 +116,7 @@ def getEER(FAR, FRR, T):
 ################################################################################
 
 
-def MatchBinary(data_feature, shift_bits=10, roc_res=10000):
+def MatchBinary(data_feature, shift_bits=10, batch_size=32, roc_res=10000):
     # get similarity scores and the signal of pairs for binary feature
     #
     # features: (N, H, W) or (N, 1, H, W) feature matrix, N is the number of samples
@@ -146,7 +146,7 @@ def MatchBinary(data_feature, shift_bits=10, roc_res=10000):
     with torch.no_grad():
         torch.backends.cudnn.benchmark = True
         torch.backends.cudnn.deterministic = True
-        sim_mat = conv_batch_Hamming(features, masks, 16, shift_bits)
+        sim_mat = conv_batch_Hamming(features, masks, batch_size, shift_bits)
 
     one_hot = OneHot(labels)
     sig_mat = torch.mm(one_hot, one_hot.t())
@@ -194,3 +194,46 @@ def MatchBinary(data_feature, shift_bits=10, roc_res=10000):
         FRR = FRR[::stride]
         T = T[::stride]
     return FAR, FRR, T, EER, T_eer, FNMR_FMR, acc_rank1, acc_rank5, acc_rank10
+
+
+if __name__ == "__main__":
+
+    path = 'feature/feature_UniNet_CASIA_CASIA-Complex-CX3.pth'
+    shift_bits = 10
+    batch_size = 64
+
+    feature_dict = torch.load(path)
+    print('\load data...')
+    data_feature = {'features': [], 'masks': [], 'labels': []}
+    for v in feature_dict.values():
+        data_feature['features'].append(torch.tensor(v['template']))
+        data_feature['labels'].append(v['label'])
+        data_feature['masks'].append(torch.tensor(v['mask']))
+    data_feature['features'] = torch.stack(data_feature['features'], 0)
+    data_feature['masks'] = torch.stack(data_feature['masks'], 0)
+
+    print('\nevaluate...')
+    FAR, FRR, T, EER, T_eer, FNMR_FMR, acc_rank1, acc_rank5, acc_rank10 = MatchBinary(
+        data_feature, shift_bits, batch_size)
+    DET_data = dict(FAR=FAR,
+                    FRR=FRR,
+                    T=T,
+                    EER=EER,
+                    T_eer=T_eer,
+                    FNMR_FMR=FNMR_FMR,
+                    acc_rank1=acc_rank1,
+                    acc_rank5=acc_rank5,
+                    acc_rank10=acc_rank10)
+
+    savemat(
+        'feature/evaluation_UniNet_{}_{}.mat'.format(cfg.model,
+                                                     cfg.dataset_name),
+        DET_data)
+    print('-' * 50)
+    print('\nEER:{:.4f}%\nAcc: rank1 {:.4f}% rank5 {:.4f}% rank10 {:.4f}%'.
+          format(EER * 100, acc_rank1 * 100, acc_rank5 * 100,
+                 acc_rank10 * 100))
+    print('-' * 50)
+    for fmr, fnmr in FNMR_FMR.items():
+        print('FNMR:{:.2f}%% @FMR:{:.2f}%%'.format(100.0 * fnmr, 100.0 * fmr))
+    print('-' * 50)
