@@ -21,7 +21,7 @@ class LoadConfig(object):
         self.dataset_path = '/home/leyuan.wang/dataset/CASIA-Complex-CX3'
 
         self.mode = 'test'
-        self.is_eval = False
+        self.is_eval = True
         self.shift_bits = 10
 
         self.model = 'CASIA'
@@ -161,9 +161,8 @@ def extraction(cfg):
                     raise NotImplementedError
     if cfg.save == 'pth':
         torch.save(
-            feature_dict,
-            'feature/feature_UniNet_{}_{}.pth'.format(cfg.model,
-                                                      cfg.dataset_name))
+            feature_dict, 'feature/{}/feature_UniNet_{}_{}.pth'.format(
+                cfg.dataset_name, cfg.model, cfg.dataset_name))
 
     if cfg.is_eval:
         print('\nevaluate...')
@@ -176,7 +175,7 @@ def extraction(cfg):
         data_feature['masks'] = torch.stack(data_feature['masks'], 0)
 
         FAR, FRR, T, EER, T_eer, FNMR_FMR, acc_rank1, acc_rank5, acc_rank10 = MatchBinary(
-            data_feature, cfg.shift_bits, cfg.batch_size)
+            data_feature, cfg.shift_bits, cfg.batch_size, cfg.device)
         DET_data = dict(FAR=FAR,
                         FRR=FRR,
                         T=T,
@@ -186,10 +185,15 @@ def extraction(cfg):
                         acc_rank1=acc_rank1,
                         acc_rank5=acc_rank5,
                         acc_rank10=acc_rank10)
+        if cfg.save == 'pth':
+            torch.save(
+                DET_data, 'feature/{}/evaluation_UniNet_{}_{}.pth'.format(
+                    cfg.dataset_name, cfg.model, cfg.dataset_name))
+        else:
+            savemat(
+                'feature/{}/evaluation_UniNet_{}_{}.mat'.format(
+                    cfg.dataset_name, cfg.model, cfg.dataset_name), DET_data)
 
-        savemat(
-            'feature/evaluation_UniNet_{}_{}.mat'.format(
-                cfg.model, cfg.dataset_name), DET_data)
         print('-' * 50)
         print('\nEER:{:.4f}%\nAcc: rank1 {:.4f}% rank5 {:.4f}% rank10 {:.4f}%'.
               format(EER * 100, acc_rank1 * 100, acc_rank5 * 100,

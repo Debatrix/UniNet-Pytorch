@@ -116,15 +116,19 @@ def getEER(FAR, FRR, T):
 ################################################################################
 
 
-def MatchBinary(data_feature, shift_bits=10, batch_size=32, roc_res=10000):
+def MatchBinary(data_feature,
+                shift_bits=10,
+                batch_size=32,
+                device='cuda:0',
+                roc_res=10000):
     # get similarity scores and the signal of pairs for binary feature
     #
     # features: (N, H, W) or (N, 1, H, W) feature matrix, N is the number of samples
     # masks: (N, H, W) or (N, 1, H, W) feature matrix, N is the number of samples
     # labels:   N labels of the features
 
-    features = data_feature['features'].cuda()
-    masks = data_feature['masks'].cuda()
+    features = data_feature['features'].to(device)
+    masks = data_feature['masks'].to(device)
     labels = data_feature['labels']
     N = features.size(0)
     if len(features.shape) == 3:
@@ -193,17 +197,18 @@ def MatchBinary(data_feature, shift_bits=10, batch_size=32, roc_res=10000):
         FAR = FAR[::stride]
         FRR = FRR[::stride]
         T = T[::stride]
-    return FAR, FRR, T, EER, T_eer, FNMR_FMR, acc_rank1, acc_rank5, acc_rank10
+    return FAR, FRR, T, EER, T_eer, FNMR_FMR, acc_rank1, acc_rank5, acc_rank10, sim_mat
 
 
 if __name__ == "__main__":
 
-    path = 'feature/feature_UniNet_CASIA_CASIA-Complex-CX3.pth'
+    path = 'feature/feature_UniNet_ND_CASIA-Complex-CX3.pth'
     shift_bits = 10
-    batch_size = 64
+    batch_size = 32
+    device = 'cuda:1'
 
     feature_dict = torch.load(path)
-    print('\load data...')
+    print('\nload data...')
     data_feature = {'features': [], 'masks': [], 'labels': []}
     for v in feature_dict.values():
         data_feature['features'].append(torch.tensor(v['template']))
@@ -213,8 +218,8 @@ if __name__ == "__main__":
     data_feature['masks'] = torch.stack(data_feature['masks'], 0)
 
     print('\nevaluate...')
-    FAR, FRR, T, EER, T_eer, FNMR_FMR, acc_rank1, acc_rank5, acc_rank10 = MatchBinary(
-        data_feature, shift_bits, batch_size)
+    FAR, FRR, T, EER, T_eer, FNMR_FMR, acc_rank1, acc_rank5, acc_rank10, sim_mat = MatchBinary(
+        data_feature, shift_bits, batch_size, device)
     DET_data = dict(FAR=FAR,
                     FRR=FRR,
                     T=T,
@@ -223,12 +228,12 @@ if __name__ == "__main__":
                     FNMR_FMR=FNMR_FMR,
                     acc_rank1=acc_rank1,
                     acc_rank5=acc_rank5,
-                    acc_rank10=acc_rank10)
+                    acc_rank10=acc_rank10,
+                    sim=sim_mat)
 
-    savemat(
-        'feature/evaluation_UniNet_{}_{}.mat'.format(cfg.model,
-                                                     cfg.dataset_name),
-        DET_data)
+    torch.save(
+        DET_data,
+        'feature/evaluation_UniNet_{}_{}.pth'.format(*path.split('_')[-2:]))
     print('-' * 50)
     print('\nEER:{:.4f}%\nAcc: rank1 {:.4f}% rank5 {:.4f}% rank10 {:.4f}%'.
           format(EER * 100, acc_rank1 * 100, acc_rank5 * 100,
